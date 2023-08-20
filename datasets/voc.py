@@ -1,13 +1,10 @@
 import os
-import sys
 import tarfile
-import collections
-import torch.utils.data as data
-import shutil
-import numpy as np
 
+import numpy as np
+import torch.utils.data as data
 from PIL import Image
-from torchvision.datasets.utils import download_url, check_integrity
+from torchvision.datasets.utils import download_url
 
 DATASET_YEAR_DICT = {
     '2012': {
@@ -59,15 +56,16 @@ def voc_cmap(N=256, normalized=False):
         r = g = b = 0
         c = i
         for j in range(8):
-            r = r | (bitget(c, 0) << 7-j)
-            g = g | (bitget(c, 1) << 7-j)
-            b = b | (bitget(c, 2) << 7-j)
+            r = r | (bitget(c, 0) << 7 - j)
+            g = g | (bitget(c, 1) << 7 - j)
+            b = b | (bitget(c, 2) << 7 - j)
             c = c >> 3
 
         cmap[i] = np.array([r, g, b])
 
-    cmap = cmap/255 if normalized else cmap
+    cmap = cmap / 255 if normalized else cmap
     return cmap
+
 
 class VOCSegmentation(data.Dataset):
     """`Pascal VOC <http://host.robots.ox.ac.uk/pascal/VOC/>`_ Segmentation Dataset.
@@ -82,6 +80,7 @@ class VOCSegmentation(data.Dataset):
             and returns a transformed version. E.g, ``transforms.RandomCrop``
     """
     cmap = voc_cmap()
+
     def __init__(self,
                  root,
                  year='2012',
@@ -89,18 +88,18 @@ class VOCSegmentation(data.Dataset):
                  download=False,
                  transform=None):
 
-        is_aug=False
-        if year=='2012_aug':
+        is_aug = False
+        if year == '2012_aug':
             is_aug = True
             year = '2012'
-        
+
         self.root = os.path.expanduser(root)
         self.year = year
         self.url = DATASET_YEAR_DICT[year]['url']
         self.filename = DATASET_YEAR_DICT[year]['filename']
         self.md5 = DATASET_YEAR_DICT[year]['md5']
         self.transform = transform
-        
+
         self.image_set = image_set
         base_dir = DATASET_YEAR_DICT[year]['base_dir']
         voc_root = os.path.join(self.root, base_dir)
@@ -112,11 +111,12 @@ class VOCSegmentation(data.Dataset):
         if not os.path.isdir(voc_root):
             raise RuntimeError('Dataset not found or corrupted.' +
                                ' You can use download=True to download it')
-        
-        if is_aug and image_set=='train':
+
+        if is_aug and image_set == 'train':
             mask_dir = os.path.join(voc_root, 'SegmentationClassAug')
-            assert os.path.exists(mask_dir), "SegmentationClassAug not found, please refer to README.md and prepare it manually"
-            split_f = os.path.join( self.root, 'train_aug.txt')#'./datasets/data/train_aug.txt'
+            assert os.path.exists(
+                mask_dir), "SegmentationClassAug not found, please refer to README.md and prepare it manually"
+            split_f = os.path.join(self.root, 'train_aug.txt')  # './datasets/data/train_aug.txt'
         else:
             mask_dir = os.path.join(voc_root, 'SegmentationClass')
             splits_dir = os.path.join(voc_root, 'ImageSets/Segmentation')
@@ -129,7 +129,7 @@ class VOCSegmentation(data.Dataset):
 
         with open(os.path.join(split_f), "r") as f:
             file_names = [x.strip() for x in f.readlines()]
-        
+
         self.images = [os.path.join(image_dir, x + ".jpg") for x in file_names]
         self.masks = [os.path.join(mask_dir, x + ".png") for x in file_names]
         assert (len(self.images) == len(self.masks))
@@ -148,7 +148,6 @@ class VOCSegmentation(data.Dataset):
 
         return img, target
 
-
     def __len__(self):
         return len(self.images)
 
@@ -157,7 +156,24 @@ class VOCSegmentation(data.Dataset):
         """decode semantic mask to RGB image"""
         return cls.cmap[mask]
 
+
 def download_extract(url, root, filename, md5):
     download_url(url, root, filename, md5)
     with tarfile.open(os.path.join(root, filename), "r") as tar:
         tar.extractall(path=root)
+
+
+if __name__ == '__main__':
+    from utils import ext_transforms as et
+
+    train_transform = et.ExtCompose([
+        # et.ExtResize(size=opts.crop_size),
+        et.ExtRandomScale((0.5, 2.0)),
+        et.ExtRandomCrop(size=(512, 512), pad_if_needed=True),
+        et.ExtRandomHorizontalFlip(),
+        et.ExtToTensor(),
+        et.ExtNormalize(mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225]),
+    ])
+    root = "/mnt/h/Datasets/2.Carotid-Artery/DATASET_CUBS_tech"
+    dataset = VOCSegmentation(root)
